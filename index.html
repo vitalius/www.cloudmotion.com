@@ -1,0 +1,354 @@
+<html>
+<head>
+<meta charset="UTF-8">
+<title>I like clouds! - Vitaliy's blog</title>  
+
+<link href='http://fonts.googleapis.com/css?family=Open+Sans:400,700' rel='stylesheet' type='text/css'>
+
+<style>
+* { box-sizing:border-box; margin:0; padding:0 } /* reset */
+
+a:link { text-decoration:underline; color:#FFFFFF; } 
+a:visited { text-decoration:underline; color:#FFFFFF; }  
+a:hover { text-decoration:underline; color:#FFFFFF; } 
+a:active { text-decoration:underline; color:#FFFFFF; }  
+
+body { 
+    color:#eee;
+    text-shadow:0 -1px 0 rgba(0,0,0,.6);
+    font-family:'Open Sans',sans-serif;
+    font-size:13px;
+    line-height:16px;
+    overflow:hidden
+}
+
+#viewport { 
+    -webkit-perspective:400;
+    -moz-perspective:400px;
+    -o-perspective:400;
+    perspective:400px;
+    
+    position:absolute;
+    left:0;
+    top:0;
+    right:0;
+    bottom:0;
+    overflow:hidden;
+    background-image:linear-gradient(bottom,#4584b4 28%,#1f4778 64%);
+    background-image:-o-linear-gradient(bottom,#4584b4 28%,#1f4778 64%);
+    background-image:-moz-linear-gradient(bottom,#4584b4 28%,#1f4778 64%);
+    background-image:-webkit-linear-gradient(bottom,#4584b4 28%,#1f4778 64%);
+    background-image:-ms-linear-gradient(bottom,#4584b4 28%,#1f4778 64%);
+    background-image: -webkit-gradient(
+			linear,
+			left bottom,
+			left top,
+			color-stop(0.28, rgb(69,132,180)),
+			color-stop(0.64, rgb(31,71,120))
+		)
+}
+
+#world { 
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    margin-left: -256px;
+    margin-top: -256px;
+    height: 512px;
+    width: 512px;
+    
+    /* background-color: rgba(255,0,0,.2); */;
+    -webkit-transform-style: preserve-3d;
+    -moz-transform-style: preserve-3d;
+    -o-transform-style: preserve-3d;
+    transform-style: preserve-3d;
+    pointer-events: none    
+}
+
+#world div {
+    -webkit-transform-style: preserve-3d;
+    -moz-transform-style: preserve-3d;
+    -o-transform-style: preserve-3d;
+    /* -ms-transform-style: preserve-3d; */
+    transform-style: preserve-3d;
+}
+
+.cloudBase { 
+    /* background-color:rgba(255,0,255,.5); */
+    position:absolute;
+    left:256px;
+    top:256px;
+    width:20px;
+    height:20px;
+    margin-left:-10px;
+    margin-top:-10px
+}
+
+.cloudLayer { 
+    position:absolute;
+    left:50%;
+    top:50%;
+    width:256px;
+    height:256px;
+    margin-left:-128px;
+    margin-top:-128px;    
+    /* background-color:rgba(0,255,255,.1); */
+    -webkit-transition: opacity .5s ease-out;
+    -moz-transition: opacity .5s ease-out;
+    -o-transition: opacity .5s ease-out;
+    -transition: opacity .5s ease-out;    
+    
+    /* background image opacity */
+    -khtml-opacity:.50; 
+    -moz-opacity:.50; 
+    -ms-filter:"alpha(opacity=50)";
+    filter: alpha(opacity=50); 
+    filter: progid:DXImageTransform.Microsoft.Alpha(opacity=0.5); 
+    opacity:.50; 
+}
+
+#name { 
+    position:absolute;
+    right:0;
+    bottom:0;
+    margin:10px;
+    padding:10px;
+    width:300px;
+    background-color:rgba(0,0,0,.4);
+    border-radius:5px;
+    text-align:center;
+}
+</style>
+  
+</head>
+<body>
+<div id="viewport">
+    <div id="world"></div>
+</div>
+<div id="name">
+    <h3>Welcome to www.cloudmotion.com</h3>
+    my name is <a href="http://vitaliy.cloudmotion.com">Vitaliy</a> and I like clouds.
+</div>
+<script type="text/javascript">
+
+/***************************************************************************************
+ *
+ * Inspiration comes from Niniane Wang's paper on realistic cloud rendering. 
+ * Abstract http://ofb.net/~niniane/clouds/CloudsInGames_NinianeWang.pdf
+ *
+ * Some code comes from the 'How to make clouds with CSS 3D' tutorial
+ * http://www.clicktorelease.com/blog/how-to-make-clouds-with-css-3d
+ *
+ ***************************************************************************************/
+
+// world setup
+var world = document.getElementById( 'world' ),
+    viewport = document.getElementById( 'viewport' ),
+    worldXAngle = 0,  // view angle of the world in X 
+    worldYAngle = 0,  // view angle of the world in Y
+    d = 8,            // distance of the world from the camera
+    p = 400;          // perspective - http://en.wikipedia.org/wiki/Perspective_(graphical)
+    
+var objects = [],     // bases for cloud clusters
+    layers = [],      // cloud layers in clusters
+    textures = ["cloudA.png", "cloudB.png", "cloudC.png", "cloudD.png"];
+
+viewport.style.webkitPerspective = p;
+viewport.style.MozPerspective = p + 'px';
+viewport.style.oPerspective = p;
+viewport.style.perspective = p;
+
+generate();
+update();
+    
+
+// mouse movement event, -180 < {x,y} > 180 degrees of rotation 
+window.addEventListener( 'mousemove', function( e ) {
+    worldYAngle = -( 0.5 - ( e.clientX / window.innerWidth ) ) * 180;
+    worldXAngle = ( 0.5 - ( e.clientY / window.innerHeight ) ) * 180;
+});
+
+ 
+// mouse wheel function - Zoom
+function onContainerMouseWheel ( event ) {
+    event = event ? event:window.event;
+    d = d - ( event.detail ? event.detail * -5 : event.wheelDelta / 8 );
+}
+window.addEventListener( 'mousewheel', onContainerMouseWheel );
+window.addEventListener( 'DOMMouseScroll', onContainerMouseWheel );
+
+
+// space bar event
+window.addEventListener( 'keydown', function ( e ) { 
+    if( e.keyCode == 32 )
+        generate();
+});
+
+// double click event
+window.addEventListener( 'dblclick', function( e ) {
+    /*
+    var clouds = document.getElementsByClassName('cloudLayer');
+    var wireframe = clouds[0].style.border;
+    for (var i = 0; i<clouds.length; i++)
+        clouds[i].style.border = ( wireframe ) ? null : 'thin solid #000';
+    */
+    generate();
+});
+
+
+window.addEventListener( 'touchmove' , function ( e ) { 
+    var ptr = e.changedTouches.length;    
+    while ( ptr-- ) { 
+        var touch = e.changedTouches[ptr];
+        worldYAngle = -( 0.5 - ( touch.pageX / window.innerWidth ) ) * 180;
+        worldXAngle = ( 0.5 - ( touch.pageY / window.innerHeight) ) * 180;
+    }
+});
+ 
+ 
+// rotate the world for new camera angles and distance
+function updateView() {
+    var t = 'translateZ( ' + d + 'px )'
+          + 'rotateX( ' + worldXAngle + 'deg)'
+          + 'rotateY( ' + worldYAngle + 'deg)';
+
+    world.style.webkitTransform=t;
+    world.style.MozTransform=t;
+    world.style.oTransform=t;   
+    world.style.transform=t;
+}
+
+ 
+// un-rotate and un-translate each layer (cloud sprite) before updating 
+// the view. Makes every cloud sprite always face the camera regardless 
+// of the viewing angle and camera position
+function update() { 
+    for ( var j=0; j<layers.length; j++ ) {
+        var layer = layers[j];
+        layer.data.a += layer.data.r;
+        
+        var t = 'translateX( ' + layer.data.x + 'px )'
+              + 'translateY( ' + layer.data.y + 'px )'
+              + 'translateZ( ' + layer.data.z + 'px )'
+              + 'rotateY( ' + ( -worldYAngle ) + 'deg )'
+              + 'rotateX( ' + ( -worldXAngle ) + 'deg )'
+              + 'rotateZ( ' + ( layer.data.a ) + 'deg )'
+              + 'scale( ' + layer.data.s + ')';
+
+        layer.style.webkitTransform=t;
+        layer.style.MozTransform=t;
+        layer.style.oTransform=t;
+        layer.style.transform=t;
+    }
+    
+    updateView();
+    requestAnimationFrame(update);
+}
+
+
+// clear and repopulate the world with new clouds
+function generate() { 
+    objects = [];
+    
+    // remove everything
+    if ( world.hasChildNodes() ) { 
+        while ( world.childNodes.length >= 1 ) { 
+            world.removeChild ( world.firstChild );
+        }
+    }
+    
+    for(var j=0; j<5; j++) { 
+        objects.push( createCloud() );
+    }
+}
+
+ 
+// Building a cloud cluster
+function createCloud() { 
+    var div = document.createElement('div');
+    div.className='cloudBase';
+    
+    // set cloud base at between -256 and 256 in x,y,z
+    var x = 256 - ( Math.random() * 512 );
+    var y = 256 - ( Math.random() * 512 );
+    var z = 256 - ( Math.random() * 512 );
+
+    var t = 'translateX( ' + x + 'px )'
+          + 'translateY( ' + y + 'px )'
+          + 'translateZ( ' + z + 'px )';
+    div.style.webkitTransform=t;
+    div.style.MozTransform=t;
+    div.style.oTransform=t;
+    div.style.transform=t;
+
+    world.appendChild ( div );
+
+    // for each cloud base, generate 5 to 15 random cloud sprites
+    for( var j = 0; j < 5 + Math.round( Math.random() * 10 ); j++ ) {
+        var cloud = document.createElement( 'div' );
+        cloud.className = 'cloudLayer';        
+        cloud.style.backgroundImage = "url('" 
+                                    + textures[ Math.floor(Math.random()*textures.length) ]
+                                    + "')";
+                                                       //   sprite  
+        var x = (256 - ( Math.random() * 512 )) * 0.2; // x position
+        var y = (256 - ( Math.random() * 512 )) * 0.2; // y position 
+        var z = 100 - ( Math.random() * 200 );         // z position 
+        var a = Math.random() * 360;                   // rotation angle
+        var s = 0.5 + Math.random();                   // scale 
+        
+        // random rotation speed and direction, scale by 1 / ( 2 + s ) 
+        // because big clouds shouldn't rotate as fast      
+        var r = (0.2 - Math.random() * 0.4) / (2 + s);       
+        
+        cloud.data = { x:x, y:y, z:z, a:a, s:s, r:r };
+        
+        var t = 'translateX( ' + x + 'px )'
+              + 'translateY( ' + y + 'px )'
+              + 'translateZ( ' + z + 'px )'
+              + 'rotateZ( ' + a + 'deg )'
+              + 'scale( ' + s + ' )';
+        cloud.style.webkitTransform = t;
+        cloud.style.MozTransform = t;
+        cloud.style.oTransform = t;
+        cloud.style.transform=t;
+        
+        div.appendChild( cloud );
+        layers.push( cloud );
+    }    
+    return div;
+}
+
+
+// Animation and timers 
+( function() {
+    var lastTime=0;
+    var vendors = ['ms','moz','webkit','o'];
+    
+    for ( var x=0; x<vendors.length && !window.requestAnimationFrame; ++x ) { 
+        window.requestAnimationFrame = window [vendors[x]+'RequestAnimationFrame'];
+        window.cancelRequestAnimationFrame = window [vendors[x]+'CancelRequestAnimationFrame'];
+    }
+
+    if( !window.requestAnimationFrame )
+        window.requestAnimationFrame = function ( callback, element ) {
+            var currTime = new Date().getTime();
+            var timeToCall = Math.max( 0, 16 - (currTime-lastTime) );
+
+            var id = window.setTimeout ( function() { 
+                callback( currTime + timeToCall );
+            }, timeToCall );
+            
+            lastTime = currTime + timeToCall; 
+            
+            return id;
+        };
+        
+        if( !window.cancelAnimationFrame )
+            window.cancelAnimationFrame = function (id) {
+                clearTimeout(id);
+            };
+}() )
+</script>
+</body>
+</html>
